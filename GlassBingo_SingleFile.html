@@ -1,0 +1,2083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A complete PeerJS-powered multiplayer Bingo web application.">
+  <title>Glass Bingo Multiplayer</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <style>
+:root {
+  --ink: #15362b;
+  --muted: rgba(21, 54, 43, 0.68);
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-strong: rgba(255, 255, 255, 0.94);
+  --stroke: rgba(35, 146, 109, 0.2);
+  --accent: #31c48d;
+  --accent-strong: #14946a;
+  --mint: #dff8ec;
+  --mint-strong: #a9efd2;
+  --gold: #d9a62e;
+  --rose: #e96d89;
+  --danger: #d83f62;
+  --shadow: 0 24px 70px rgba(25, 105, 82, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 12% 16%, rgba(125, 222, 184, 0.42), transparent 27%),
+    radial-gradient(circle at 84% 14%, rgba(229, 255, 241, 0.95), transparent 31%),
+    radial-gradient(circle at 45% 88%, rgba(255, 238, 178, 0.36), transparent 32%),
+    linear-gradient(135deg, #fbfffc 0%, #ecfbf2 42%, #d9f5e8 100%);
+  overflow-x: hidden;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  content: "";
+  background:
+    linear-gradient(120deg, rgba(49, 196, 141, 0.11), rgba(255, 255, 255, 0.44), rgba(217, 166, 46, 0.08)),
+    repeating-linear-gradient(90deg, rgba(20, 148, 106, 0.055) 0 1px, transparent 1px 96px),
+    repeating-linear-gradient(0deg, rgba(20, 148, 106, 0.045) 0 1px, transparent 1px 96px);
+  background-size: 260% 260%, auto, auto;
+  animation: gradientFlow 14s ease-in-out infinite alternate;
+}
+
+body::after {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(circle at center, transparent 0, rgba(221, 248, 236, 0.55) 84%);
+}
+
+.background-glow {
+  position: fixed;
+  inset: auto -15vw -24vh -15vw;
+  z-index: -1;
+  height: 54vh;
+  background: radial-gradient(circle, rgba(49, 196, 141, 0.22), rgba(255, 255, 255, 0.64), transparent 66%);
+  filter: blur(24px);
+  pointer-events: none;
+}
+
+.spark-field {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.spark-field span {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 28px var(--accent);
+  opacity: 0.55;
+  animation: floatSpark 9s ease-in-out infinite;
+}
+
+.spark-field span:nth-child(1) { left: 8%; top: 22%; animation-delay: -1s; }
+.spark-field span:nth-child(2) { left: 22%; top: 78%; background: #79d8bd; box-shadow: 0 0 28px #79d8bd; animation-delay: -5s; }
+.spark-field span:nth-child(3) { left: 48%; top: 12%; background: #b8f2d8; box-shadow: 0 0 28px #b8f2d8; animation-delay: -3s; }
+.spark-field span:nth-child(4) { left: 78%; top: 68%; background: #8eeacb; box-shadow: 0 0 28px #8eeacb; animation-delay: -7s; }
+.spark-field span:nth-child(5) { left: 92%; top: 30%; background: #c8f6df; box-shadow: 0 0 28px #c8f6df; animation-delay: -4s; }
+.spark-field span:nth-child(6) { left: 56%; top: 88%; background: #ffe5a6; box-shadow: 0 0 28px #ffe5a6; animation-delay: -6s; }
+
+.app-shell {
+  width: min(1220px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 26px 0 44px;
+}
+
+.topbar,
+.panel,
+.glass-card,
+.side-panel,
+.call-box,
+.showcase-card {
+  border: 1px solid var(--stroke);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(231, 250, 241, 0.78));
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(24px);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 92px;
+  margin-bottom: 22px;
+  padding: 18px 22px;
+  border-radius: 8px;
+}
+
+.topbar h1,
+h2 {
+  background: linear-gradient(90deg, #15362b, var(--accent-strong), #72b894);
+  background-clip: text;
+  color: transparent;
+}
+
+.topbar h1 {
+  text-shadow: 0 16px 44px rgba(49, 196, 141, 0.14);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.2rem, 5vw, 4.8rem);
+  line-height: 0.9;
+}
+
+h2 {
+  max-width: 780px;
+  font-size: clamp(2.2rem, 5.2vw, 5.8rem);
+  line-height: 0.92;
+}
+
+h3 {
+  font-size: 1.05rem;
+}
+
+.eyebrow {
+  margin-bottom: 10px;
+  color: var(--accent-strong);
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.muted {
+  max-width: 690px;
+  margin-top: 18px;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.connection-pill,
+.mini-stat {
+  flex: 0 0 auto;
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.connection-pill::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 9px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  box-shadow: 0 0 18px currentColor;
+}
+
+.connection-pill[data-state="online"] {
+  color: var(--accent-strong);
+}
+
+.connection-pill[data-state="reconnecting"],
+.connection-pill[data-state="connecting"] {
+  color: var(--gold);
+}
+
+.connection-pill[data-state="error"],
+.connection-pill[data-state="disconnected"] {
+  color: var(--danger);
+}
+
+.screen {
+  display: none;
+}
+
+.screen.is-active {
+  display: block;
+  animation: screenIn 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.panel {
+  position: relative;
+  min-height: 67vh;
+  border-radius: 8px;
+  padding: clamp(18px, 4vw, 42px);
+  overflow: hidden;
+}
+
+.panel::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.84), transparent 30%),
+    radial-gradient(circle at 88% 10%, rgba(49, 196, 141, 0.15), transparent 30%);
+}
+
+.panel > * {
+  position: relative;
+}
+
+.intro-panel {
+  display: grid;
+  gap: 34px;
+}
+
+.hero-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.feature-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.feature-strip span {
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  padding: 9px 13px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.home-stage {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.86fr) minmax(360px, 1.14fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
+.showcase-card {
+  display: grid;
+  gap: 16px;
+  align-content: space-between;
+  min-height: 520px;
+  border-radius: 8px;
+  padding: 20px;
+  transform: perspective(1100px) rotateY(-8deg) rotateX(3deg);
+  transform-origin: center;
+  animation: cardDrift 7s ease-in-out infinite;
+}
+
+.showcase-top,
+.showcase-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.showcase-top strong {
+  color: var(--accent-strong);
+  font-size: 1.4rem;
+  letter-spacing: 0.08em;
+}
+
+.preview-board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.preview-board i {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 1px solid rgba(20, 148, 106, 0.16);
+  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.78);
+  font-style: normal;
+  font-weight: 950;
+}
+
+.preview-board i.lit {
+  color: #0b392b;
+  background: linear-gradient(135deg, var(--mint-strong), #f5ffd9);
+  box-shadow: 0 0 28px rgba(49, 196, 141, 0.26);
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.glass-card,
+.side-panel,
+.call-box {
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.glass-card,
+.side-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::after,
+.side-panel::after {
+  position: absolute;
+  inset: auto 18px 0;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(49, 196, 141, 0.55), transparent);
+}
+
+.glass-card:hover {
+  border-color: rgba(49, 196, 141, 0.42);
+  box-shadow: var(--shadow), 0 0 54px rgba(49, 196, 141, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.featured-form {
+  box-shadow: var(--shadow), 0 0 46px rgba(49, 196, 141, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.card-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mode-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 18px var(--accent);
+}
+
+.mode-dot.join {
+  background: var(--gold);
+  box-shadow: 0 0 18px var(--gold);
+}
+
+form,
+label {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+input,
+select,
+button {
+  min-height: 50px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid rgba(20, 148, 106, 0.22);
+  padding: 0 14px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.88);
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+select option {
+  color: var(--ink);
+}
+
+input::placeholder {
+  color: rgba(21, 54, 43, 0.4);
+}
+
+input:focus,
+select:focus {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 0 0 4px rgba(49, 196, 141, 0.14), 0 0 34px rgba(49, 196, 141, 0.1);
+}
+
+button {
+  cursor: pointer;
+  font-weight: 950;
+  transition: transform 180ms ease, opacity 180ms ease, filter 180ms ease, box-shadow 180ms ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.02);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.primary-btn {
+  color: #083629;
+  background: linear-gradient(135deg, #91edc9, #f2fff8);
+  box-shadow: 0 14px 30px rgba(49, 196, 141, 0.18);
+}
+
+.secondary-btn {
+  color: var(--ink);
+  background: linear-gradient(135deg, #dff8ec, #ffffff);
+  box-shadow: 0 14px 30px rgba(49, 196, 141, 0.12);
+}
+
+.ghost-btn {
+  border: 1px solid var(--stroke);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.section-heading,
+.game-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.lobby-meta,
+.player-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.lobby-meta span,
+.player-chip,
+.submission-item,
+.rank-item,
+.called-numbers span {
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.lobby-meta span {
+  padding: 10px 13px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.player-list {
+  margin-top: 24px;
+}
+
+.player-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(270px, 100%);
+  padding: 15px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.player-chip small,
+.rank-item small {
+  color: var(--accent-strong);
+  font-weight: 950;
+}
+
+.builder-layout,
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 22px;
+  align-items: start;
+}
+
+.board-wrap {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  border-radius: 8px;
+  padding: clamp(10px, 2vw, 18px);
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 0 70px rgba(49, 196, 141, 0.08);
+}
+
+.bingo-board {
+  display: grid;
+  grid-template-columns: repeat(var(--size), minmax(36px, 1fr));
+  gap: clamp(6px, 1vw, 10px);
+  width: min(100%, 660px);
+  aspect-ratio: 1;
+}
+
+.board-cell {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(20, 148, 106, 0.2);
+  border-radius: 8px;
+  color: var(--ink);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(229, 249, 239, 0.74)),
+    rgba(255, 255, 255, 0.9);
+  font-size: clamp(0.86rem, 2.8vw, 1.45rem);
+  font-weight: 950;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 10px 24px rgba(25, 105, 82, 0.1);
+}
+
+.board-cell:not(:disabled):hover {
+  border-color: rgba(49, 196, 141, 0.72);
+  background: #f0fff8;
+  box-shadow: 0 0 24px rgba(49, 196, 141, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.board-cell.marked {
+  color: #083629;
+  background: linear-gradient(135deg, #84e8bf, #f4ffda);
+  box-shadow: 0 0 30px rgba(49, 196, 141, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+.board-cell.pulse {
+  animation: markPop 580ms ease both;
+}
+
+.bingo-btn {
+  min-height: 64px;
+  border: 1px solid rgba(49, 196, 141, 0.32);
+  color: #073326;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.96), transparent 18%),
+    linear-gradient(135deg, #d9ffe9, #91edc9 46%, #f5ffd9);
+  box-shadow: 0 18px 38px rgba(49, 196, 141, 0.18), 0 0 46px rgba(49, 196, 141, 0.12);
+  font-size: 1.18rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.bingo-btn:hover:not(:disabled) {
+  box-shadow: 0 20px 44px rgba(49, 196, 141, 0.25), 0 0 62px rgba(49, 196, 141, 0.18);
+}
+
+.side-panel {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.side-panel h3 {
+  color: var(--ink);
+}
+
+.submission-list,
+.leaderboard,
+.called-numbers {
+  display: grid;
+  gap: 10px;
+}
+
+.submission-item,
+.rank-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+}
+
+.submission-item.done {
+  border-color: rgba(49, 196, 141, 0.5);
+  background: rgba(49, 196, 141, 0.12);
+}
+
+.submission-item strong {
+  color: var(--gold);
+  font-size: 0.78rem;
+}
+
+.submission-item.done strong {
+  color: var(--accent-strong);
+}
+
+.play-area {
+  display: grid;
+  gap: 18px;
+}
+
+.call-box form {
+  grid-template-columns: minmax(0, 1fr) 120px;
+  margin-bottom: 10px;
+}
+
+#lastCalled {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.rank-item {
+  grid-template-columns: auto 1fr auto;
+}
+
+.rank-item:first-child {
+  border-color: rgba(49, 196, 141, 0.42);
+  background: linear-gradient(135deg, rgba(49, 196, 141, 0.16), rgba(255, 255, 255, 0.82));
+  box-shadow: 0 14px 30px rgba(49, 196, 141, 0.1);
+}
+
+.rank-item strong {
+  color: var(--gold);
+}
+
+.called-numbers {
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+}
+
+.called-numbers span {
+  display: grid;
+  place-items: center;
+  min-height: 38px;
+  color: #083629;
+  background: linear-gradient(135deg, rgba(169, 239, 210, 0.96), rgba(255, 255, 255, 0.95));
+  font-weight: 950;
+  animation: numberDrop 260ms ease both;
+}
+
+.results-panel {
+  display: grid;
+  align-content: center;
+  gap: 18px;
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.toast-stack {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 20;
+  display: grid;
+  gap: 10px;
+  width: min(370px, calc(100% - 36px));
+}
+
+.toast {
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  padding: 14px 16px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+  animation: toastIn 240ms ease both;
+}
+
+.toast.error {
+  border-color: rgba(216, 63, 98, 0.42);
+}
+
+.toast.is-hiding {
+  animation: toastOut 420ms ease both;
+}
+
+@keyframes gradientFlow {
+  from { background-position: 0% 50%, 0 0, 0 0; }
+  to { background-position: 100% 50%, 0 0, 0 0; }
+}
+
+@keyframes floatSpark {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.42; }
+  50% { transform: translate3d(22px, -34px, 0) scale(1.45); opacity: 0.74; }
+}
+
+@keyframes cardDrift {
+  0%, 100% { transform: perspective(1100px) rotateY(-8deg) rotateX(3deg) translateY(0); }
+  50% { transform: perspective(1100px) rotateY(-4deg) rotateX(4deg) translateY(-10px); }
+}
+
+@keyframes screenIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes markPop {
+  0% { transform: scale(0.92); }
+  60% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+@keyframes numberDrop {
+  from { opacity: 0; transform: translateY(-8px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+@media (max-width: 980px) {
+  .home-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .showcase-card {
+    min-height: 390px;
+    transform: none;
+    animation: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .topbar,
+  .section-heading,
+  .game-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .action-grid,
+  .builder-layout,
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .side-panel {
+    order: -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    width: min(100% - 20px, 1220px);
+    padding-top: 10px;
+  }
+
+  .panel,
+  .glass-card,
+  .side-panel,
+  .call-box,
+  .topbar,
+  .showcase-card {
+    padding: 14px;
+  }
+
+  h2 {
+    font-size: clamp(2rem, 13vw, 3.4rem);
+  }
+
+  .call-box form {
+    grid-template-columns: 1fr;
+  }
+
+  .bingo-board,
+  .preview-board {
+    gap: 5px;
+  }
+}
+
+</style>
+</head>
+<body>
+  <div class="background-glow"></div>
+  <div class="spark-field" aria-hidden="true">
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">PeerJS Multiplayer</p>
+        <h1>Glass Bingo</h1>
+      </div>
+      <div class="topbar-actions">
+        <div class="connection-pill" id="connectionStatus">Offline</div>
+      </div>
+    </header>
+
+    <section class="screen is-active" id="homeScreen">
+      <div class="panel intro-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Create or join</p>
+          <h2>Build the card. Call the numbers. Chase the crown.</h2>
+          <p class="muted">Private 8-digit rooms, live lobbies, manual card building, animated marking, turn order, and real-time rankings over PeerJS.</p>
+          <div class="feature-strip" aria-label="Game features">
+            <span>3x3-8x8 grids</span>
+            <span>Live turns</span>
+            <span>Auto start</span>
+            <span>Ranked results</span>
+          </div>
+        </div>
+
+        <div class="home-stage">
+          <div class="showcase-card" aria-hidden="true">
+            <div class="showcase-top">
+              <span>LIVE ROOM</span>
+              <strong>84920173</strong>
+            </div>
+            <div class="preview-board">
+              <i>8</i><i>3</i><i>11</i><i>19</i><i>24</i>
+              <i>14</i><i class="lit">1</i><i>6</i><i>25</i><i>10</i>
+              <i>20</i><i>18</i><i class="lit">12</i><i>4</i><i>7</i>
+              <i>5</i><i>22</i><i>16</i><i class="lit">9</i><i>2</i>
+              <i>23</i><i>13</i><i>17</i><i>21</i><i class="lit">15</i>
+            </div>
+            <div class="showcase-bottom">
+              <span>#1 Mira</span>
+              <span>5 lines</span>
+            </div>
+          </div>
+
+          <div class="action-grid">
+            <form class="glass-card featured-form" id="hostForm">
+              <div class="card-heading">
+                <span class="mode-dot host"></span>
+                <h3>Host Room</h3>
+              </div>
+              <label>
+                Your name
+                <input id="hostName" maxlength="24" placeholder="Host name" required>
+              </label>
+              <label>
+                Grid size
+                <select id="gridSize" required>
+                  <option value="3">3 x 3</option>
+                  <option value="4">4 x 4</option>
+                  <option value="5" selected>5 x 5</option>
+                  <option value="6">6 x 6</option>
+                  <option value="7">7 x 7</option>
+                  <option value="8">8 x 8</option>
+                </select>
+              </label>
+              <label>
+                Number of players
+                <input id="maxPlayers" type="number" min="1" max="12" value="2" required>
+              </label>
+              <button class="primary-btn" type="submit">Create Room</button>
+            </form>
+
+            <form class="glass-card" id="joinForm">
+              <div class="card-heading">
+                <span class="mode-dot join"></span>
+                <h3>Join Room</h3>
+              </div>
+              <label>
+                Your name
+                <input id="playerName" maxlength="24" placeholder="Player name" required>
+              </label>
+              <label>
+                Room code
+                <input id="roomCode" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" placeholder="12345678" required>
+              </label>
+              <button class="secondary-btn" type="submit">Join Room</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="lobbyScreen">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Lobby</p>
+            <h2>Room <span id="lobbyRoomCode">--------</span></h2>
+          </div>
+          <button class="ghost-btn" id="copyRoomBtn" type="button">Copy Code</button>
+        </div>
+        <div class="lobby-meta">
+          <span id="lobbyGrid">Grid: -</span>
+          <span id="lobbyCapacity">Players: -</span>
+          <span id="lobbyStatus">Waiting</span>
+        </div>
+        <div class="player-list" id="playerList"></div>
+      </div>
+    </section>
+
+    <section class="screen" id="builderScreen">
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Card Builder</p>
+            <h2>Place numbers 1 through <span id="builderTotal">25</span></h2>
+          </div>
+          <div class="mini-stat">Next: <strong id="nextNumber">1</strong></div>
+        </div>
+        <div class="builder-layout">
+          <div class="board-wrap">
+            <div class="bingo-board" id="builderBoard"></div>
+          </div>
+          <aside class="side-panel">
+            <h3>Submission Status</h3>
+            <div id="submissionList" class="submission-list"></div>
+            <button class="primary-btn" id="submitCardBtn" type="button" disabled>Submit Card</button>
+            <button class="ghost-btn" id="resetCardBtn" type="button">Reset Card</button>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="gameScreen">
+      <div class="panel">
+        <div class="game-header">
+          <div>
+            <p class="eyebrow">Gameplay</p>
+            <h2 id="turnBanner">Waiting for turn</h2>
+          </div>
+          <div class="mini-stat">Lines: <strong id="lineCount">0</strong></div>
+        </div>
+
+        <div class="game-layout">
+          <div class="play-area">
+            <div class="call-box" id="callBox">
+              <form id="callForm">
+                <input id="callNumberInput" type="number" min="1" placeholder="Enter number">
+                <button class="primary-btn" id="callNumberBtn" type="submit">Call</button>
+              </form>
+              <p id="lastCalled">No number called yet.</p>
+            </div>
+            <div class="board-wrap">
+              <div class="bingo-board" id="gameBoard"></div>
+            </div>
+          </div>
+
+          <aside class="side-panel">
+            <h3>Leaderboard</h3>
+            <div id="leaderboard" class="leaderboard"></div>
+            <button class="bingo-btn" id="claimBingoBtn" type="button">Bingo!</button>
+            <h3>Called Numbers</h3>
+            <div id="calledNumbers" class="called-numbers"></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="resultsScreen">
+      <div class="panel results-panel">
+        <p class="eyebrow">Results</p>
+        <h2>Final Rankings</h2>
+        <div id="finalResults" class="leaderboard final"></div>
+        <button class="secondary-btn" id="newGameBtn" type="button">New Game</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+<script>
+(function () {
+  "use strict";
+
+  /**
+   * Board helpers keep card creation, marking, and line detection predictable.
+   */
+  const Board = {
+    create(size) {
+      return Array.from({ length: size }, () => Array(size).fill(null));
+    },
+
+    createMarks(size) {
+      return Array.from({ length: size }, () => Array(size).fill(false));
+    },
+
+    clone(grid) {
+      return grid.map((row) => row.slice());
+    },
+
+    nextNumber(grid) {
+      return grid.flat().filter((value) => value !== null).length + 1;
+    },
+
+    isComplete(grid) {
+      return grid.every((row) => row.every((value) => Number.isInteger(value)));
+    },
+
+    contains(grid, number) {
+      return grid.some((row) => row.includes(number));
+    },
+
+    markNumber(grid, marks, number) {
+      let changed = false;
+      const nextMarks = marks.map((row) => row.slice());
+
+      grid.forEach((row, rowIndex) => {
+        row.forEach((value, columnIndex) => {
+          if (value === number && !nextMarks[rowIndex][columnIndex]) {
+            nextMarks[rowIndex][columnIndex] = true;
+            changed = true;
+          }
+        });
+      });
+
+      return { marks: nextMarks, changed };
+    },
+
+    completedLines(marks) {
+      const size = marks.length;
+      let lines = 0;
+
+      for (let row = 0; row < size; row += 1) {
+        if (marks[row].every(Boolean)) lines += 1;
+      }
+
+      for (let column = 0; column < size; column += 1) {
+        let complete = true;
+        for (let row = 0; row < size; row += 1) {
+          if (!marks[row][column]) complete = false;
+        }
+        if (complete) lines += 1;
+      }
+
+      let mainDiagonal = true;
+      let antiDiagonal = true;
+      for (let index = 0; index < size; index += 1) {
+        if (!marks[index][index]) mainDiagonal = false;
+        if (!marks[index][size - index - 1]) antiDiagonal = false;
+      }
+
+      if (mainDiagonal) lines += 1;
+      if (antiDiagonal) lines += 1;
+      return lines;
+    }
+  };
+
+  window.BingoBoard = Board;
+}());
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  /**
+   * A Bingo is awarded when a player completes at least the grid-size number of
+   * lines. This makes larger cards require a larger achievement while preserving
+   * the classic "B-I-N-G-O" five-line feel for a 5x5 game.
+   */
+  const Bingo = {
+    requiredLines(size) {
+      return size;
+    },
+
+    evaluate(marks) {
+      const completed = window.BingoBoard.completedLines(marks);
+      return {
+        completed,
+        hasBingo: completed >= this.requiredLines(marks.length)
+      };
+    }
+  };
+
+  window.Bingo = Bingo;
+}());
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  class RankingManager {
+    constructor() {
+      this.rankings = [];
+    }
+
+    fromSnapshot(rankings) {
+      this.rankings = Array.isArray(rankings) ? rankings.slice() : [];
+    }
+
+    add(playerId, name) {
+      if (this.rankings.some((entry) => entry.id === playerId)) {
+        return this.rankings.find((entry) => entry.id === playerId);
+      }
+
+      const entry = {
+        id: playerId,
+        name,
+        rank: this.rankings.length + 1,
+        finishedAt: Date.now()
+      };
+      this.rankings.push(entry);
+      return entry;
+    }
+
+    allFinished(totalPlayers) {
+      return this.rankings.length >= totalPlayers;
+    }
+
+    snapshot() {
+      return this.rankings.slice();
+    }
+  }
+
+  window.RankingManager = RankingManager;
+}());
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  class TurnManager {
+    constructor(order) {
+      this.order = order.slice();
+      this.index = 0;
+    }
+
+    current() {
+      return this.order[this.index] || null;
+    }
+
+    advance(finishedIds) {
+      if (!this.order.length) return null;
+
+      for (let step = 0; step < this.order.length; step += 1) {
+        this.index = (this.index + 1) % this.order.length;
+        const candidate = this.current();
+        if (!finishedIds.includes(candidate)) return candidate;
+      }
+
+      return this.current();
+    }
+  }
+
+  window.TurnManager = TurnManager;
+}());
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  class RoomState {
+    constructor({ roomCode, gridSize, maxPlayers, host }) {
+      this.roomCode = roomCode;
+      this.gridSize = gridSize;
+      this.maxPlayers = maxPlayers;
+      this.players = [host];
+      this.cards = {};
+      this.marks = {};
+      this.submitted = {};
+      this.calledNumbers = [];
+      this.currentTurn = null;
+      this.started = false;
+      this.finished = false;
+      this.rankings = [];
+    }
+
+    addPlayer(player) {
+      if (this.players.some((entry) => entry.id === player.id)) return true;
+      if (this.players.length >= this.maxPlayers) return false;
+      this.players.push(player);
+      return true;
+    }
+
+    removePlayer(playerId) {
+      this.players = this.players.filter((player) => player.id !== playerId);
+      delete this.cards[playerId];
+      delete this.marks[playerId];
+      delete this.submitted[playerId];
+      this.rankings = this.rankings.filter((entry) => entry.id !== playerId);
+    }
+
+    submitCard(playerId, card) {
+      this.cards[playerId] = window.BingoBoard.clone(card);
+      this.marks[playerId] = window.BingoBoard.createMarks(this.gridSize);
+      this.submitted[playerId] = true;
+    }
+
+    allCardsSubmitted() {
+      return this.players.length === this.maxPlayers &&
+        this.players.every((player) => this.submitted[player.id]);
+    }
+
+    start() {
+      this.started = true;
+      this.currentTurn = this.players[0] ? this.players[0].id : null;
+    }
+
+    snapshot() {
+      return {
+        roomCode: this.roomCode,
+        gridSize: this.gridSize,
+        maxPlayers: this.maxPlayers,
+        players: this.players.slice(),
+        submitted: { ...this.submitted },
+        cards: JSON.parse(JSON.stringify(this.cards)),
+        marks: JSON.parse(JSON.stringify(this.marks)),
+        calledNumbers: this.calledNumbers.slice(),
+        currentTurn: this.currentTurn,
+        started: this.started,
+        finished: this.finished,
+        rankings: this.rankings.slice()
+      };
+    }
+  }
+
+  window.RoomState = RoomState;
+}());
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  class PeerNetwork {
+    constructor({ onStatus, onMessage, onOpen, onConnection, onDisconnect, onError }) {
+      this.peer = null;
+      this.connections = new Map();
+      this.isHost = false;
+      this.onStatus = onStatus || function () {};
+      this.onMessage = onMessage || function () {};
+      this.onOpen = onOpen || function () {};
+      this.onConnection = onConnection || function () {};
+      this.onDisconnect = onDisconnect || function () {};
+      this.onError = onError || function () {};
+    }
+
+    createRoom(roomCode) {
+      this.isHost = true;
+      this.peer = new Peer(this.roomCodeToPeerId(roomCode), this.peerOptions());
+      this.bindPeerEvents();
+    }
+
+    joinRoom(roomCode) {
+      this.isHost = false;
+      this.peer = new Peer(undefined, this.peerOptions());
+      this.bindPeerEvents(this.roomCodeToPeerId(roomCode));
+    }
+
+    peerOptions() {
+      return {
+        debug: 1,
+        secure: true,
+        host: "0.peerjs.com",
+        port: 443,
+        path: "/"
+      };
+    }
+
+    roomCodeToPeerId(roomCode) {
+      return `bingo-${String(roomCode).trim()}`;
+    }
+
+    bindPeerEvents(roomCodeToJoin) {
+      this.onStatus("Connecting");
+
+      this.peer.on("open", (id) => {
+        this.onStatus("Online");
+        this.onOpen(id);
+
+        if (roomCodeToJoin) {
+          const connection = this.peer.connect(roomCodeToJoin, { reliable: true });
+          this.registerConnection(connection);
+        }
+      });
+
+      this.peer.on("connection", (connection) => {
+        this.registerConnection(connection);
+      });
+
+      this.peer.on("disconnected", () => {
+        this.onStatus("Disconnected");
+        if (!this.peer.destroyed) {
+          this.peer.reconnect();
+          this.onStatus("Reconnecting");
+        }
+      });
+
+      this.peer.on("error", (error) => {
+        this.onStatus("Error");
+        this.onError(error);
+      });
+    }
+
+    registerConnection(connection) {
+      connection.on("open", () => {
+        this.connections.set(connection.peer, connection);
+        this.onConnection(connection.peer);
+      });
+
+      connection.on("data", (message) => {
+        this.onMessage(connection.peer, message);
+      });
+
+      connection.on("close", () => {
+        this.connections.delete(connection.peer);
+        this.onDisconnect(connection.peer);
+      });
+
+      connection.on("error", (error) => {
+        this.onError(error);
+      });
+    }
+
+    send(peerId, message) {
+      const connection = this.connections.get(peerId);
+      if (connection && connection.open) {
+        connection.send(message);
+      }
+    }
+
+    broadcast(message) {
+      this.connections.forEach((connection) => {
+        if (connection.open) connection.send(message);
+      });
+    }
+
+    destroy() {
+      this.connections.forEach((connection) => connection.close());
+      this.connections.clear();
+      if (this.peer) this.peer.destroy();
+    }
+  }
+
+  window.PeerNetwork = PeerNetwork;
+}());
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  class GameController {
+    constructor(ui) {
+      this.ui = ui;
+      this.network = null;
+      this.localId = null;
+      this.localName = "";
+      this.isHost = false;
+      this.room = null;
+      this.state = null;
+      this.builderCard = [];
+      this.cardLocked = false;
+      this.ranking = new window.RankingManager();
+    }
+
+    host({ name, gridSize, maxPlayers }) {
+      const roomCode = this.generateRoomCode();
+      this.isHost = true;
+      this.localName = name;
+      this.initNetwork();
+      this.network.createRoom(roomCode);
+
+      this.pendingHostConfig = { roomCode, gridSize, maxPlayers, name };
+    }
+
+    join({ name, roomCode }) {
+      this.isHost = false;
+      this.localName = name;
+      this.initNetwork();
+      this.network.joinRoom(roomCode);
+    }
+
+    initNetwork() {
+      if (this.network) this.network.destroy();
+
+      this.network = new window.PeerNetwork({
+        onStatus: (status) => this.ui.setConnectionStatus(status),
+        onOpen: (id) => this.handlePeerOpen(id),
+        onConnection: (peerId) => this.handleConnection(peerId),
+        onDisconnect: (peerId) => this.handleDisconnect(peerId),
+        onMessage: (peerId, message) => this.handleMessage(peerId, message),
+        onError: (error) => this.ui.toast(error.message || "Peer connection failed.", "error")
+      });
+    }
+
+    handlePeerOpen(id) {
+      this.localId = id;
+
+      if (this.isHost && this.pendingHostConfig) {
+        const config = this.pendingHostConfig;
+        const host = { id, name: config.name, isHost: true };
+        this.room = new window.RoomState({
+          roomCode: config.roomCode,
+          gridSize: config.gridSize,
+          maxPlayers: config.maxPlayers,
+          host
+        });
+        this.applySnapshot(this.room.snapshot());
+        this.ui.showLobby();
+        this.ui.toast(`Room ${config.roomCode} created.`);
+      }
+    }
+
+    handleConnection(peerId) {
+      if (!this.isHost) {
+        this.network.send(peerId, { type: "join", name: this.localName });
+        return;
+      }
+
+      this.network.send(peerId, { type: "welcome", snapshot: this.room.snapshot() });
+    }
+
+    handleDisconnect(peerId) {
+      if (!this.isHost || !this.room || this.room.started) return;
+      this.room.removePlayer(peerId);
+      this.broadcastSnapshot();
+      this.ui.toast("A player left the lobby.");
+    }
+
+    handleMessage(peerId, message) {
+      if (!message || !message.type) return;
+
+      if (this.isHost) {
+        this.handleHostMessage(peerId, message);
+      } else {
+        this.handleClientMessage(message);
+      }
+    }
+
+    handleHostMessage(peerId, message) {
+      if (message.type === "join") {
+        const accepted = this.room.addPlayer({
+          id: peerId,
+          name: this.cleanName(message.name),
+          isHost: false
+        });
+
+        if (!accepted) {
+          this.network.send(peerId, { type: "rejected", reason: "Room is full." });
+          return;
+        }
+
+        this.broadcastSnapshot();
+        this.ui.toast(`${this.cleanName(message.name)} joined.`);
+        return;
+      }
+
+      if (message.type === "submit-card") {
+        this.hostSubmitCard(peerId, message.card);
+        return;
+      }
+
+      if (message.type === "call-number") {
+        this.hostCallNumber(peerId, Number(message.number));
+        return;
+      }
+
+      if (message.type === "mark-cell") {
+        this.hostMarkCell(peerId, message.row, message.column);
+        return;
+      }
+
+      if (message.type === "claim-bingo") {
+        this.hostClaimBingo(peerId);
+        return;
+      }
+    }
+
+    handleClientMessage(message) {
+      if (message.type === "welcome" || message.type === "state") {
+        this.applySnapshot(message.snapshot);
+      }
+
+      if (message.type === "toast") {
+        this.ui.toast(message.message || "Game update received.", message.level);
+      }
+
+      if (message.type === "rejected") {
+        this.ui.toast(message.reason || "Unable to join room.", "error");
+        this.ui.showHome();
+      }
+    }
+
+    submitLocalCard(card) {
+      if (this.cardLocked) return;
+
+      if (this.isHost) {
+        this.hostSubmitCard(this.localId, card);
+      } else {
+        this.network.broadcast({ type: "submit-card", card });
+      }
+    }
+
+    hostSubmitCard(playerId, card) {
+      if (!this.validCard(card, this.room.gridSize)) {
+        this.sendToast(playerId, "Invalid card submitted.", "error");
+        return;
+      }
+
+      this.room.submitCard(playerId, card);
+      if (this.room.allCardsSubmitted() && !this.room.started) {
+        this.room.start();
+        this.ui.toast("All cards submitted. Game started!");
+      }
+      this.broadcastSnapshot();
+    }
+
+    callNumber(number) {
+      if (this.isHost) {
+        this.hostCallNumber(this.localId, number);
+      } else {
+        this.network.broadcast({ type: "call-number", number });
+      }
+    }
+
+    markCell(row, column) {
+      if (this.isHost) {
+        this.hostMarkCell(this.localId, row, column);
+      } else {
+        this.network.broadcast({ type: "mark-cell", row, column });
+      }
+    }
+
+    claimBingo() {
+      if (this.isHost) {
+        this.hostClaimBingo(this.localId);
+      } else {
+        this.network.broadcast({ type: "claim-bingo" });
+      }
+    }
+
+    hostCallNumber(playerId, number) {
+      const playerCard = this.room.cards[playerId];
+      const player = this.room.players.find((entry) => entry.id === playerId);
+
+      if (this.room.finished) return;
+      if (this.room.currentTurn !== playerId) {
+        this.sendToast(playerId, "It is not your turn.", "error");
+        return;
+      }
+      if (!Number.isInteger(number)) {
+        this.sendToast(playerId, "Enter a whole number.", "error");
+        return;
+      }
+      if (this.room.calledNumbers.includes(number)) {
+        this.sendToast(playerId, "That number has already been called.", "error");
+        return;
+      }
+      if (!window.BingoBoard.contains(playerCard, number)) {
+        this.sendToast(playerId, "The number must exist on your own card.", "error");
+        return;
+      }
+
+      this.room.calledNumbers.push(number);
+
+      const finishedIds = this.room.rankings.map((entry) => entry.id);
+      const turn = new window.TurnManager(this.room.players.map((entry) => entry.id));
+      turn.index = Math.max(0, turn.order.indexOf(this.room.currentTurn));
+      this.room.currentTurn = turn.advance(finishedIds);
+
+      if (this.room.rankings.length === this.room.players.length) {
+        this.room.finished = true;
+      }
+
+      this.broadcastSnapshot();
+      if (player) this.ui.toast(`${player.name} called ${number}.`);
+    }
+
+    hostMarkCell(playerId, row, column) {
+      const card = this.room.cards[playerId];
+      const marks = this.room.marks[playerId];
+      const player = this.room.players.find((entry) => entry.id === playerId);
+
+      if (!card || !marks) return;
+      if (!Number.isInteger(row) || !Number.isInteger(column)) return;
+      if (!card[row] || typeof card[row][column] === "undefined") return;
+      if (marks[row][column]) return;
+
+      if (!this.room.calledNumbers.includes(card[row][column])) {
+        this.sendToast(playerId, "You can only mark numbers that have been called.", "error");
+        return;
+      }
+
+      marks[row][column] = true;
+      this.broadcastSnapshot();
+      if (player) this.sendToast(playerId, `${card[row][column]} marked for ${player.name}.`);
+    }
+
+    hostClaimBingo(playerId) {
+      const player = this.room.players.find((entry) => entry.id === playerId);
+      const marks = this.room.marks[playerId];
+
+      if (!player || !marks) return;
+      if (this.room.rankings.some((entry) => entry.id === playerId)) {
+        this.sendToast(playerId, "You already claimed Bingo.");
+        return;
+      }
+
+      const evaluation = window.Bingo.evaluate(marks);
+      if (!evaluation.hasBingo) {
+        this.sendToast(
+          playerId,
+          `Not yet. You need ${window.Bingo.requiredLines(this.room.gridSize)} completed lines.`,
+          "error"
+        );
+        return;
+      }
+
+      this.ranking.fromSnapshot(this.room.rankings);
+      const rank = this.ranking.add(player.id, player.name);
+      this.room.rankings = this.ranking.snapshot();
+      this.advanceTurnIfCurrentPlayerFinished();
+
+      if (this.room.rankings.length === this.room.players.length) {
+        this.room.finished = true;
+      }
+
+      this.broadcastSnapshot();
+      this.ui.toast(`${player.name} claimed rank #${rank.rank}!`);
+      this.network.broadcast({ type: "toast", message: `${player.name} claimed rank #${rank.rank}!` });
+    }
+
+    advanceTurnIfCurrentPlayerFinished() {
+      const finishedIds = this.room.rankings.map((entry) => entry.id);
+      if (!finishedIds.includes(this.room.currentTurn)) return;
+
+      const turn = new window.TurnManager(this.room.players.map((entry) => entry.id));
+      turn.index = Math.max(0, turn.order.indexOf(this.room.currentTurn));
+      this.room.currentTurn = turn.advance(finishedIds);
+    }
+
+    sendToast(playerId, message, level) {
+      if (playerId === this.localId) {
+        this.ui.toast(message, level);
+      } else {
+        this.network.send(playerId, { type: "toast", message, level });
+      }
+    }
+
+    updateRankings() {
+      this.ranking.fromSnapshot(this.room.rankings);
+      this.room.players.forEach((player) => {
+        if (!this.room.marks[player.id]) return;
+        const evaluation = window.Bingo.evaluate(this.room.marks[player.id]);
+        if (evaluation.hasBingo) this.ranking.add(player.id, player.name);
+      });
+      this.room.rankings = this.ranking.snapshot();
+    }
+
+    broadcastSnapshot() {
+      const snapshot = this.room.snapshot();
+      this.applySnapshot(snapshot);
+      this.network.broadcast({ type: "state", snapshot });
+    }
+
+    applySnapshot(snapshot) {
+      if (!snapshot) return;
+      this.state = snapshot;
+      this.cardLocked = Boolean(snapshot.submitted && snapshot.submitted[this.localId]);
+      this.ui.render(snapshot, this);
+    }
+
+    validCard(card, size) {
+      if (!Array.isArray(card) || card.length !== size) return false;
+      const values = card.flat();
+      const expected = size * size;
+      if (values.length !== expected) return false;
+      const unique = new Set(values);
+      for (let number = 1; number <= expected; number += 1) {
+        if (!unique.has(number)) return false;
+      }
+      return unique.size === expected;
+    }
+
+    generateRoomCode() {
+      return String(Math.floor(10000000 + Math.random() * 90000000));
+    }
+
+    cleanName(name) {
+      return String(name || "Player").trim().slice(0, 24) || "Player";
+    }
+
+    resetLocalCard() {
+      if (!this.state || this.cardLocked) return;
+      this.builderCard = window.BingoBoard.create(this.state.gridSize);
+      this.ui.renderBuilderBoard(this.builderCard, this);
+    }
+  }
+
+  window.GameController = GameController;
+}());
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  class UIController {
+    constructor() {
+      this.screens = {
+        home: document.getElementById("homeScreen"),
+        lobby: document.getElementById("lobbyScreen"),
+        builder: document.getElementById("builderScreen"),
+        game: document.getElementById("gameScreen"),
+        results: document.getElementById("resultsScreen")
+      };
+      this.connectionStatus = document.getElementById("connectionStatus");
+      this.toastStack = document.getElementById("toastStack");
+      this.lastRenderedScreen = "home";
+    }
+
+    show(screenName) {
+      Object.entries(this.screens).forEach(([name, element]) => {
+        element.classList.toggle("is-active", name === screenName);
+      });
+      this.lastRenderedScreen = screenName;
+    }
+
+    showHome() {
+      this.show("home");
+    }
+
+    showLobby() {
+      this.show("lobby");
+    }
+
+    showBuilder() {
+      this.show("builder");
+    }
+
+    showGame() {
+      this.show("game");
+    }
+
+    showResults() {
+      this.show("results");
+    }
+
+    setConnectionStatus(status) {
+      this.connectionStatus.textContent = status;
+      this.connectionStatus.dataset.state = status.toLowerCase();
+    }
+
+    toast(message, type) {
+      const toast = document.createElement("div");
+      toast.className = `toast ${type || "info"}`;
+      toast.textContent = message;
+      this.toastStack.appendChild(toast);
+      window.setTimeout(() => toast.classList.add("is-hiding"), 3200);
+      window.setTimeout(() => toast.remove(), 3800);
+    }
+
+    render(snapshot, game) {
+      this.renderLobby(snapshot, game);
+      this.renderSubmissionList(snapshot);
+
+      if (!snapshot.started) {
+        if (snapshot.players.length === snapshot.maxPlayers) {
+          this.showBuilder();
+          if (!game.builderCard.length) game.resetLocalCard();
+        } else {
+          this.showLobby();
+        }
+        return;
+      }
+
+      this.renderGame(snapshot, game);
+      if (snapshot.finished) this.showResults();
+      else this.showGame();
+    }
+
+    renderLobby(snapshot) {
+      document.getElementById("lobbyRoomCode").textContent = snapshot.roomCode;
+      document.getElementById("lobbyGrid").textContent = `Grid: ${snapshot.gridSize} x ${snapshot.gridSize}`;
+      document.getElementById("lobbyCapacity").textContent = `Players: ${snapshot.players.length}/${snapshot.maxPlayers}`;
+      document.getElementById("lobbyStatus").textContent = snapshot.players.length === snapshot.maxPlayers ? "Ready" : "Waiting";
+
+      const playerList = document.getElementById("playerList");
+      playerList.innerHTML = "";
+      snapshot.players.forEach((player) => {
+        const item = document.createElement("div");
+        item.className = "player-chip";
+        item.innerHTML = `
+          <span>${this.escape(player.name)}</span>
+          <small>${player.isHost ? "Host" : "Player"}</small>
+        `;
+        playerList.appendChild(item);
+      });
+    }
+
+    renderSubmissionList(snapshot) {
+      const list = document.getElementById("submissionList");
+      list.innerHTML = "";
+      snapshot.players.forEach((player) => {
+        const submitted = Boolean(snapshot.submitted[player.id]);
+        const item = document.createElement("div");
+        item.className = `submission-item ${submitted ? "done" : ""}`;
+        item.innerHTML = `
+          <span>${this.escape(player.name)}</span>
+          <strong>${submitted ? "Submitted" : "Building"}</strong>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    renderBuilderBoard(card, game) {
+      const board = document.getElementById("builderBoard");
+      const size = game.state.gridSize;
+      const next = window.BingoBoard.nextNumber(card);
+      const locked = game.cardLocked;
+
+      board.style.setProperty("--size", size);
+      board.innerHTML = "";
+      document.getElementById("builderTotal").textContent = size * size;
+      document.getElementById("nextNumber").textContent = Math.min(next, size * size);
+
+      card.forEach((row, rowIndex) => {
+        row.forEach((value, columnIndex) => {
+          const cell = document.createElement("button");
+          cell.className = "board-cell";
+          cell.type = "button";
+          cell.textContent = value || "";
+          cell.disabled = locked || value !== null;
+          cell.addEventListener("click", () => {
+            if (game.cardLocked || card[rowIndex][columnIndex]) return;
+            card[rowIndex][columnIndex] = window.BingoBoard.nextNumber(card);
+            this.renderBuilderBoard(card, game);
+          });
+          board.appendChild(cell);
+        });
+      });
+
+      document.getElementById("submitCardBtn").disabled = locked || !window.BingoBoard.isComplete(card);
+      document.getElementById("resetCardBtn").disabled = locked;
+    }
+
+    renderGame(snapshot, game) {
+      const localCard = snapshot.cards[game.localId];
+      const localMarks = snapshot.marks[game.localId];
+      if (!localCard || !localMarks) return;
+
+      const evaluation = window.Bingo.evaluate(localMarks);
+      const hasClaimed = snapshot.rankings.some((entry) => entry.id === game.localId);
+      document.getElementById("lineCount").textContent = `${evaluation.completed}/${window.Bingo.requiredLines(snapshot.gridSize)}`;
+      document.getElementById("claimBingoBtn").disabled = hasClaimed || snapshot.finished;
+
+      const currentPlayer = snapshot.players.find((player) => player.id === snapshot.currentTurn);
+      const isTurn = snapshot.currentTurn === game.localId;
+      document.getElementById("turnBanner").textContent = isTurn ? "Your turn to call" : `${currentPlayer ? currentPlayer.name : "Someone"} is calling`;
+      document.getElementById("callNumberInput").disabled = !isTurn;
+      document.getElementById("callNumberBtn").disabled = !isTurn;
+      document.getElementById("callNumberInput").max = snapshot.gridSize * snapshot.gridSize;
+
+      const last = snapshot.calledNumbers[snapshot.calledNumbers.length - 1];
+      document.getElementById("lastCalled").textContent = last ? `Last called: ${last}` : "No number called yet.";
+
+      this.renderGameBoard(localCard, localMarks, snapshot.calledNumbers, game);
+      this.renderCalledNumbers(snapshot.calledNumbers);
+      this.renderLeaderboard(snapshot);
+      this.renderResults(snapshot);
+    }
+
+    renderGameBoard(card, marks, calledNumbers, game) {
+      const board = document.getElementById("gameBoard");
+      const size = card.length;
+      board.style.setProperty("--size", size);
+      board.innerHTML = "";
+
+      card.forEach((row, rowIndex) => {
+        row.forEach((value, columnIndex) => {
+          const cell = document.createElement("button");
+          const isMarked = marks[rowIndex][columnIndex];
+          const canTap = calledNumbers.includes(value) && !isMarked;
+          cell.className = `board-cell ${isMarked ? "marked" : ""}`;
+          cell.type = "button";
+          cell.textContent = value;
+          cell.disabled = !canTap;
+          cell.addEventListener("click", () => {
+            if (!canTap) return;
+            cell.classList.add("pulse");
+            game.markCell(rowIndex, columnIndex);
+            window.setTimeout(() => cell.classList.remove("pulse"), 600);
+          });
+          board.appendChild(cell);
+        });
+      });
+    }
+
+    renderCalledNumbers(numbers) {
+      const container = document.getElementById("calledNumbers");
+      container.innerHTML = "";
+      numbers.slice().reverse().forEach((number) => {
+        const chip = document.createElement("span");
+        chip.textContent = number;
+        container.appendChild(chip);
+      });
+    }
+
+    renderLeaderboard(snapshot) {
+      const container = document.getElementById("leaderboard");
+      container.innerHTML = "";
+      const rankedIds = snapshot.rankings.map((entry) => entry.id);
+
+      snapshot.rankings.forEach((entry) => {
+        container.appendChild(this.createRankItem(entry.rank, entry.name, "Bingo"));
+      });
+
+      snapshot.players
+        .filter((player) => !rankedIds.includes(player.id))
+        .forEach((player) => {
+          const marks = snapshot.marks[player.id];
+          const lines = marks ? window.Bingo.evaluate(marks).completed : 0;
+          container.appendChild(this.createRankItem("-", player.name, `${lines} lines`));
+        });
+    }
+
+    renderResults(snapshot) {
+      const container = document.getElementById("finalResults");
+      container.innerHTML = "";
+      snapshot.rankings.forEach((entry) => {
+        container.appendChild(this.createRankItem(entry.rank, entry.name, "Finished"));
+      });
+    }
+
+    createRankItem(rank, name, meta) {
+      const item = document.createElement("div");
+      item.className = "rank-item";
+      item.innerHTML = `
+        <strong>#${rank}</strong>
+        <span>${this.escape(name)}</span>
+        <small>${this.escape(meta)}</small>
+      `;
+      return item;
+    }
+
+    escape(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  }
+
+  window.UIController = UIController;
+}());
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  const ui = new window.UIController();
+  const game = new window.GameController(ui);
+
+  document.getElementById("hostForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = document.getElementById("hostName").value.trim();
+    const gridSize = Number(document.getElementById("gridSize").value);
+    const maxPlayers = Number(document.getElementById("maxPlayers").value);
+    game.host({ name, gridSize, maxPlayers });
+  });
+
+  document.getElementById("joinForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = document.getElementById("playerName").value.trim();
+    const roomCode = document.getElementById("roomCode").value.trim();
+    game.join({ name, roomCode });
+  });
+
+  document.getElementById("copyRoomBtn").addEventListener("click", async () => {
+    const code = document.getElementById("lobbyRoomCode").textContent;
+    try {
+      await navigator.clipboard.writeText(code);
+      ui.toast("Room code copied.");
+    } catch (error) {
+      ui.toast(`Room code: ${code}`);
+    }
+  });
+
+  document.getElementById("submitCardBtn").addEventListener("click", () => {
+    if (!window.BingoBoard.isComplete(game.builderCard)) return;
+    game.submitLocalCard(game.builderCard);
+    ui.toast("Card submitted and locked.");
+  });
+
+  document.getElementById("resetCardBtn").addEventListener("click", () => {
+    game.resetLocalCard();
+    ui.toast("Card reset.");
+  });
+
+  document.getElementById("callForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = document.getElementById("callNumberInput");
+    game.callNumber(Number(input.value));
+    input.value = "";
+  });
+
+  document.getElementById("claimBingoBtn").addEventListener("click", () => {
+    game.claimBingo();
+  });
+
+  document.getElementById("newGameBtn").addEventListener("click", () => {
+    window.location.reload();
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (game.network) game.network.destroy();
+  });
+}());
+
+</script>
+</body>
+</html>
